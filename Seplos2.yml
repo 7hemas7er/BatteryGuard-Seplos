@@ -1,0 +1,152 @@
+# This configuration is based on:
+# https://raw.githubusercontent.com/syssi/esphome-seplos-bms/main/esp8266-example.yaml
+# Original author: Sebastian Syska (@syssi)
+
+substitutions:
+  name: seplos-bms
+  device_description: "Monitor a Seplos BMS via RS485"
+  external_components_source: github://syssi/esphome-seplos-bms@main
+  tx_pin: GPIO16
+  rx_pin: GPIO17
+
+esphome:
+  name: ${name}
+  comment: ${device_description}
+  project:
+    name: "syssi.esphome-seplos-bms"
+    version: 1.1.0
+
+esp32:
+  #board: wemos_d1_mini32
+  board: esp32doit-devkit-v1
+
+
+external_components:
+  - source: ${external_components_source}
+    refresh: 0s
+
+wifi:
+  ssid: !secret wifi_IOT
+  password: !secret wifi_IOT_password
+
+ota:
+  platform: esphome
+logger:
+  level: DEBUG
+
+api:
+
+uart:
+  id: uart_0
+  baud_rate: 9600
+  tx_pin: ${tx_pin}
+  rx_pin: ${rx_pin}
+  rx_buffer_size: 384
+  debug:
+    dummy_receiver: false
+    direction: BOTH
+
+seplos_modbus:
+  id: modbus0
+  uart_id: uart_0
+  rx_timeout: 150ms
+
+seplos_bms:
+  id: bms0
+  # Dip switch configuration of a single pack setup / address 0x0
+  #  8    7    6    5    4    3    2    1
+  # off, off, off, off, off, off, off, off
+  address: 0x00
+  # Known protocol versions: 0x20 (Seplos), 0x26 (Boqiang)
+  protocol_version: 0x20
+  seplos_modbus_id: modbus0
+  update_interval: 5s
+
+sensor:
+  - platform: seplos_bms
+    min_cell_voltage:
+      name: "${name} min cell voltage"
+    max_cell_voltage:
+      name: "${name} max cell voltage"
+    min_voltage_cell:
+      name: "${name} min voltage cell"
+    max_voltage_cell:
+      name: "${name} max voltage cell"
+    delta_cell_voltage:
+      name: "${name} delta cell voltage"
+    average_cell_voltage:
+      name: "${name} average cell voltage"
+    cell_voltage_1:
+      name: "${name} cell voltage 1"
+    cell_voltage_2:
+      name: "${name} cell voltage 2"
+    cell_voltage_3:
+      name: "${name} cell voltage 3"
+    cell_voltage_4:
+      name: "${name} cell voltage 4"
+    cell_voltage_5:
+      name: "${name} cell voltage 5"
+    cell_voltage_6:
+      name: "${name} cell voltage 6"
+    cell_voltage_7:
+      name: "${name} cell voltage 7"
+    cell_voltage_8:
+      name: "${name} cell voltage 8"
+    cell_voltage_9:
+      name: "${name} cell voltage 9"
+    cell_voltage_10:
+      name: "${name} cell voltage 10"
+    cell_voltage_11:
+      name: "${name} cell voltage 11"
+    cell_voltage_12:
+      name: "${name} cell voltage 12"
+    cell_voltage_13:
+      name: "${name} cell voltage 13"
+    cell_voltage_14:
+      name: "${name} cell voltage 14"
+    cell_voltage_15:
+      name: "${name} cell voltage 15"
+    cell_voltage_16:
+      name: "${name} cell voltage 16"
+    temperature_1:
+      name: "${name} temperature 1"
+    temperature_2:
+      name: "${name} temperature 2"
+    temperature_3:
+      name: "${name} temperature 3"
+    temperature_4:
+      name: "${name} temperature 4"
+    temperature_5:
+      name: "${name} environment temperature"
+    temperature_6:
+      name: "${name} mosfet temperature"
+    total_voltage:
+      name: "${name} total voltage"
+    current:
+      name: "${name} current"
+    power:
+      name: "${name} power"
+    charging_power:
+      name: "${name} charging power"
+      unit_of_measurement: "W"
+      device_class: energy
+      state_class: measurement
+    discharging_power:
+      name: "${name} discharging power"
+      device_class: energy
+      unit_of_measurement: "W"
+      state_class: measurement
+    residual_capacity:
+      name: "${name} residual capacity"
+    battery_capacity:
+      name: "${name} battery capacity"
+    rated_capacity:
+      name: "${name} rated capacity"
+    state_of_charge:
+      name: "${name} state of charge"
+    charging_cycles:
+      name: "${name} charging cycles"
+    state_of_health:
+      name: "${name} state of health"
+    port_voltage:
+      name: "${name} port voltage"
