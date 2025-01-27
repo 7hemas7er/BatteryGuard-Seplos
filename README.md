@@ -1,5 +1,7 @@
-# BatteryGuard-Seplos
-ESPHome configuration for monitoring Seplos BMS through Home Assistant. Complete battery monitoring solution with cell voltage tracking, temperature sensing, and power monitoring via RS485/Modbus communication.
+# BatteryGuard-seplos
+A project to monitor Seplos Battery Management System (BMS) through ESPHome in Home Assistant, providing comprehensive battery monitoring capabilities.
+
+Note: This project is based on the esp8266-example.yaml from esphome-seplos-bms by Sebastian Syska (@syssi).
 
 ## Prerequisites
 
@@ -94,3 +96,4 @@ This project is open source. Feel free to use and modify as needed.
 ## Credits
 
 Based on the [esphome-seplos-bms](https://github.com/syssi/esphome-seplos-bms) component by @syssi.
+
