@@ -157,7 +157,7 @@ The project includes extensive sensor monitoring:
 - Ensure DIP switches on BMS are correctly configured
 - Monitor debug output in ESPHome logs
 - If the alarm entities stay `unknown`, the `0x44` frame is not being answered.
-  Set `logger: level: INFO` and look for `Telesignalization frame (N bytes)` in
+  Set `logger: level: DEBUG` and look for `Telesignalization frame (N bytes)` in
   the logs — the raw frame is printed there, which is what you need to confirm
   the offsets for your firmware revision.
 

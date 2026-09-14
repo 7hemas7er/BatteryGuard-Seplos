@@ -47,7 +47,7 @@ void SeplosBms::on_telemetry_data_(const std::vector<uint8_t> &data) {
     return (uint16_t(data[i + 0]) << 8) | (uint16_t(data[i + 1]) << 0);
   };
 
-  ESP_LOGI(TAG, "Telemetry frame (%d bytes) received", data.size());
+  ESP_LOGI(TAG, "Telemetry frame (%zu bytes) received", data.size());
   ESP_LOGVV(TAG, "  %s", format_hex_pretty(&data.front(), data.size()).c_str());  // NOLINT
 
   // ->
@@ -177,7 +177,7 @@ void SeplosBms::on_telesignalization_data_(const std::vector<uint8_t> &data) {
   // Always dump the raw frame at INFO level: the official protocol XML
   // (Agreement/16S_V20_ADDR_EN.xml) documents the bit meanings but not the
   // exact framing offsets, so the first real frame is used to confirm them.
-  ESP_LOGD(TAG, "Telesignalization frame (%d bytes): %s", data.size(),
+  ESP_LOGD(TAG, "Telesignalization frame (%zu bytes): %s", data.size(),
            format_hex_pretty(&data.front(), data.size()).c_str());  // NOLINT
 
   // Standard Seplos V2.0 alarm INFO layout (after the VER/ADR/CID1/RTN/LEN header):
