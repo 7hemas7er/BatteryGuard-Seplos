@@ -1,13 +1,20 @@
-# This configuration is based on:
-# https://raw.githubusercontent.com/syssi/esphome-seplos-bms/main/esp8266-example.yaml
-# Original author: Sebastian Syska (@syssi)
+# BatteryGuard-Seplos
+# Monitor a Seplos BMS via RS485 with ESPHome.
+#
+# Based on esphome-seplos-bms by Sebastian Syska (@syssi).
+# This configuration uses the LOCAL components/ directory, a fork of that
+# component that additionally decodes the telesignalization frame (CID2 0x44)
+# to expose warning / protection / system fault alarms. See README.md.
 
 substitutions:
   name: seplos-bms
   device_description: "Monitor a Seplos BMS via RS485"
   external_components_source: github://syssi/esphome-seplos-bms@main
+  #tx_pin: GPIO4
+  #rx_pin: GPIO5
   tx_pin: GPIO16
   rx_pin: GPIO17
+  baud_rate: 9600
 
 esphome:
   name: ${name}
@@ -18,38 +25,56 @@ esphome:
 
 esp32:
   #board: wemos_d1_mini32
-  board: esp32doit-devkit-v1
-
+  board: esp32dev
+  framework:
+    type: esp-idf
+    advanced:
+      minimum_chip_revision: "3.1"
+      sram1_as_iram: true
+    
+    
 
 external_components:
-  - source: ${external_components_source}
+  - source:
+      type: local
+      path: components
+    components: [seplos_bms, seplos_modbus]
     refresh: 0s
 
 wifi:
   ssid: !secret wifi_IOT
   password: !secret wifi_IOT_password
+  fast_connect: true
+  reboot_timeout: 15min
+  power_save_mode: none
+  ap:
+    ssid: "Seplos-bms"
+    password: !secret fallback_password
 
 ota:
   platform: esphome
+  password: !secret ota_password
 logger:
-  level: DEBUG
+  level: INFO
 
 api:
+  encryption:
+    key: !secret api_encryption_key
 
 uart:
   id: uart_0
-  baud_rate: 9600
+  # Please set the default baudrate of your Seplos BMS model here. It's sometimes 19200 baud instead of 9600.
+  baud_rate: ${baud_rate}
   tx_pin: ${tx_pin}
   rx_pin: ${rx_pin}
+  # The increased RX buffer size is important because
+  # the full BMS response must fit into the buffer
   rx_buffer_size: 384
-  debug:
-    dummy_receiver: false
-    direction: BOTH
 
 seplos_modbus:
   id: modbus0
   uart_id: uart_0
-  rx_timeout: 150ms
+  rx_timeout: 250ms
 
 seplos_bms:
   id: bms0
@@ -150,3 +175,33 @@ sensor:
       name: "${name} state of health"
     port_voltage:
       name: "${name} port voltage"
+
+  - platform: wifi_signal
+    name: "${name} RSSI"
+    update_interval: 60s
+  - platform: uptime
+    name: "${name} uptime"
+
+
+binary_sensor:
+  - platform: seplos_bms
+    seplos_bms_id: bms0
+    online_status:
+      name: "${name} online"
+    warning:
+      name: "${name} warning"
+    protection:
+      name: "${name} protection"
+    system_fault:
+      name: "${name} system fault"
+
+text_sensor:
+  - platform: seplos_bms
+    seplos_bms_id: bms0
+    errors:
+      name: "${name} errors"
+  - platform: wifi_info
+    bssid:
+      name: "${name} bssid"
+    ip_address:
+      name: "${name} ip"

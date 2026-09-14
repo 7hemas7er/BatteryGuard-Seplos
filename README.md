@@ -1,7 +1,15 @@
 # BatteryGuard-seplos
 A project to monitor Seplos Battery Management System (BMS) through ESPHome in Home Assistant, providing comprehensive battery monitoring capabilities.
 
-Note: This project is based on the esp8266-example.yaml from esphome-seplos-bms by Sebastian Syska (@syssi).
+Note: This project is based on esphome-seplos-bms by Sebastian Syska (@syssi).
+
+**It ships a fork of that component that adds alarm monitoring.** Upstream reads
+only the telemetry frame (CID2 `0x42`) — voltages, currents, temperatures. The
+BMS reports its actual warning and protection flags in a *separate*
+telesignalization frame (CID2 `0x44`) that upstream never requests, so a Seplos
+pack can sit in protection while every published sensor still reads normal.
+This fork alternates between the two commands and exposes the alarms. See
+[Alarm monitoring](#alarm-monitoring).
 
 ## Prerequisites
 
@@ -19,6 +27,12 @@ Note: This project is based on the esp8266-example.yaml from esphome-seplos-bms 
   - Charging and discharging power
   - Battery health and capacity metrics
   - State of charge monitoring
+
+- Alarm monitoring (fork addition):
+  - `warning` — the BMS has raised a warning
+  - `protection` — the BMS has acted to protect the pack
+  - `system fault` — hardware/system fault flag
+  - `errors` — text sensor listing the active alarm conditions
 
 - Connectivity:
   - WiFi connectivity
@@ -44,19 +58,77 @@ substitutions:
   rx_pin: GPIO17
 ```
 
-### WiFi Setup
+### Required secrets
 Add to your ESPHome's `secrets.yaml`:
 ```yaml
 wifi_IOT: "your_ssid"
 wifi_IOT_password: "your_password"
+fallback_password: "captive_portal_password"
+api_encryption_key: "base64_32_byte_key"
+ota_password: "your_ota_password"
 ```
 
 ### External Component
-The project uses syssi's Seplos BMS component:
+This configuration uses the **local** `components/` directory in this
+repository, not the upstream component, because the alarm decoding lives there:
+
 ```yaml
 external_components:
-  - source: github://syssi/esphome-seplos-bms@main
+  - source:
+      type: local
+      path: components
+    components: [seplos_bms, seplos_modbus]
     refresh: 0s
+```
+
+Copy the `components/` folder next to your YAML file, so you end up with
+`/config/esphome/components/seplos_bms/` and
+`/config/esphome/components/seplos_modbus/`.
+
+To go back to plain upstream behaviour (telemetry only, no alarms), replace the
+block above with `source: github://syssi/esphome-seplos-bms@main` and remove the
+`binary_sensor` and `text_sensor` sections that reference `warning`,
+`protection`, `system_fault` and `errors`.
+
+## Alarm monitoring
+
+The Seplos V2.0 protocol splits its data across two commands:
+
+| CID2 | Frame | Contents |
+|---|---|---|
+| `0x42` | Telemetry | cell voltages, currents, temperatures, SOC |
+| `0x44` | Telesignalization | per-cell, per-temperature and system alarm bitfields |
+
+Upstream only ever issues `0x42`. This fork alternates: each `update_interval`
+tick requests the other command, so with the default 5 s interval each frame
+type arrives roughly every 10 s.
+
+The alarm bytes distinguish *warnings* (the BMS is unhappy) from *protections*
+(the BMS has already acted — cut charge or discharge). Those are aggregated into
+the `warning` and `protection` binary sensors, with the individual conditions
+listed in the `errors` text sensor, so a single automation on `protection` is
+enough to catch a pack that has shut itself down.
+
+Add to your YAML:
+
+```yaml
+binary_sensor:
+  - platform: seplos_bms
+    seplos_bms_id: bms0
+    online_status:
+      name: "${name} online"
+    warning:
+      name: "${name} warning"
+    protection:
+      name: "${name} protection"
+    system_fault:
+      name: "${name} system fault"
+
+text_sensor:
+  - platform: seplos_bms
+    seplos_bms_id: bms0
+    errors:
+      name: "${name} errors"
 ```
 
 ## Communication Protocol
@@ -84,6 +156,10 @@ The project includes extensive sensor monitoring:
 - Verify RS485 connections and baud rate
 - Ensure DIP switches on BMS are correctly configured
 - Monitor debug output in ESPHome logs
+- If the alarm entities stay `unknown`, the `0x44` frame is not being answered.
+  Set `logger: level: INFO` and look for `Telesignalization frame (N bytes)` in
+  the logs — the raw frame is printed there, which is what you need to confirm
+  the offsets for your firmware revision.
 
 ## Contributing
 
@@ -91,9 +167,15 @@ Feel free to report issues and propose improvements.
 
 ## License
 
-This project is open source. Feel free to use and modify as needed.
+Apache License 2.0 — see [LICENSE](LICENSE) and [NOTICE](NOTICE).
+
+The component sources under `components/` are derived from @syssi's
+Apache-2.0 licensed work; the three modified files carry a notice of change at
+the top, as required.
 
 ## Credits
 
-Based on the [esphome-seplos-bms](https://github.com/syssi/esphome-seplos-bms) component by @syssi.
+Based on the [esphome-seplos-bms](https://github.com/syssi/esphome-seplos-bms)
+component by Sebastian Syska (@syssi), licensed under Apache 2.0. The
+telesignalization (`0x44`) decoding is the addition made here.
 

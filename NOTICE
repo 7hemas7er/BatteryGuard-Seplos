@@ -1,0 +1,16 @@
+BatteryGuard-Seplos
+Copyright 2026 7hemas7er
+
+This product includes software developed as part of esphome-seplos-bms
+(https://github.com/syssi/esphome-seplos-bms), Copyright Sebastian Syska
+(@syssi), licensed under the Apache License, Version 2.0.
+
+The following files are modified versions of the upstream originals:
+
+  components/seplos_bms/seplos_bms.cpp
+  components/seplos_bms/seplos_bms.h
+  components/seplos_bms/binary_sensor.py
+
+The modification adds decoding of the Seplos telesignalization frame
+(CID2 0x44) and the alarm entities derived from it. All other files under
+components/ are unmodified copies of the upstream sources.
