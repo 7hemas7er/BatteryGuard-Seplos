@@ -11,6 +11,30 @@ pack can sit in protection while every published sensor still reads normal.
 This fork alternates between the two commands and exposes the alarms. See
 [Alarm monitoring](#alarm-monitoring).
 
+> ### ⚠️ Known limitation — read before relying on the alarm entities
+>
+> **The alarm flags in this fork produce false positives.** On the author's
+> installation the `protection` binary sensor toggles on for a single frame
+> roughly 80 times a day, on a pack that is not in protection at all.
+>
+> **Root cause:** this fork routes an incoming frame by remembering which
+> command it last sent. When a reply is late or lost — and the request
+> schedule has already moved on — a *telemetry* reply gets handed to the alarm
+> decoder. The decoder has no frame-size or temperature-count validation to
+> catch it, so it reads cell voltages and temperatures as alarm bitfields.
+> A real 16-cell telemetry frame fed through this path decodes as 17
+> simultaneous alarms, including "Output short circuit".
+>
+> **Use [syssi's PR #155](https://github.com/syssi/esphome-seplos-bms/pull/155)
+> instead.** It decodes the same frame into 7 granular flags, covers
+> `seplos_bms_ble` too, and — crucially — routes by frame size, which makes the
+> misrouting above impossible. It is the maintainer's own work, it has been
+> mergeable with green CI since July 2025, and it is strictly better than what
+> is in this repository.
+>
+> This repository keeps its fork only so the configuration below stays
+> reproducible. If you want alarms that you can trust, track #155.
+
 ## Prerequisites
 
 - Home Assistant with ESPHome installed
@@ -106,8 +130,11 @@ type arrives roughly every 10 s.
 The alarm bytes distinguish *warnings* (the BMS is unhappy) from *protections*
 (the BMS has already acted — cut charge or discharge). Those are aggregated into
 the `warning` and `protection` binary sensors, with the individual conditions
-listed in the `errors` text sensor, so a single automation on `protection` is
-enough to catch a pack that has shut itself down.
+listed in the `errors` text sensor.
+
+**Do not drive an automation directly off these flags** — see the known
+limitation above. If you automate on them anyway, require the state to hold for
+at least a minute (`for: "00:01:00"`), which filters the single-frame spikes.
 
 Add to your YAML:
 
