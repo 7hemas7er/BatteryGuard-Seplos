@@ -11,29 +11,29 @@ pack can sit in protection while every published sensor still reads normal.
 This fork alternates between the two commands and exposes the alarms. See
 [Alarm monitoring](#alarm-monitoring).
 
-> ### ⚠️ Known limitation — read before relying on the alarm entities
+> ### Alarm false positives — fixed, pending hardware confirmation
 >
-> **The alarm flags in this fork produce false positives.** On the author's
-> installation the `protection` binary sensor toggles on for a single frame
-> roughly 80 times a day, on a pack that is not in protection at all.
+> Until September 2026 this fork routed an incoming frame by remembering which
+> command it had last sent. A late or lost reply left that bookkeeping pointing
+> at the wrong command, so a *telemetry* reply could be handed to the alarm
+> decoder — which had no validation to reject it and read cell voltages and
+> temperatures as alarm bitfields. On the author's installation this produced
+> roughly **83 spurious `protection` pulses per day** on a healthy pack; a real
+> 16-cell telemetry frame fed through that path decodes as 17 simultaneous
+> alarms, "Output short circuit" among them.
 >
-> **Root cause:** this fork routes an incoming frame by remembering which
-> command it last sent. When a reply is late or lost — and the request
-> schedule has already moved on — a *telemetry* reply gets handed to the alarm
-> decoder. The decoder has no frame-size or temperature-count validation to
-> catch it, so it reads cell voltages and temperatures as alarm bitfields.
-> A real 16-cell telemetry frame fed through this path decodes as 17
-> simultaneous alarms, including "Output short circuit".
+> **Fixed:** frames are now recognised by length, which separates the two types
+> unambiguously for every supported cell count (telemetry 65-81 bytes, alarm
+> 43-55). The alarm decoder additionally rejects an implausible temperature
+> count and refuses to decode a truncated event region. Verified against a real
+> 16-cell telemetry frame and against synthetic alarm frames with and without an
+> active protection; **confirmation on live hardware is still outstanding.**
 >
-> **Use [syssi's PR #155](https://github.com/syssi/esphome-seplos-bms/pull/155)
-> instead.** It decodes the same frame into 7 granular flags, covers
-> `seplos_bms_ble` too, and — crucially — routes by frame size, which makes the
-> misrouting above impossible. It is the maintainer's own work, it has been
-> mergeable with green CI since July 2025, and it is strictly better than what
-> is in this repository.
->
-> This repository keeps its fork only so the configuration below stays
-> reproducible. If you want alarms that you can trust, track #155.
+> Also worth knowing: [syssi's PR #155](https://github.com/syssi/esphome-seplos-bms/pull/155)
+> implements the same frame far more thoroughly — 7 granular flags instead of 3
+> aggregates, `seplos_bms_ble` coverage, protocol docs — and has been mergeable
+> with green CI since July 2025. If you want the complete picture rather than
+> the three summary flags below, track that PR.
 
 ## Prerequisites
 
@@ -132,9 +132,8 @@ The alarm bytes distinguish *warnings* (the BMS is unhappy) from *protections*
 the `warning` and `protection` binary sensors, with the individual conditions
 listed in the `errors` text sensor.
 
-**Do not drive an automation directly off these flags** — see the known
-limitation above. If you automate on them anyway, require the state to hold for
-at least a minute (`for: "00:01:00"`), which filters the single-frame spikes.
+When automating on these flags, requiring the state to hold for a minute
+(`for: "00:01:00"`) is still sensible practice on a noisy RS485 bus.
 
 Add to your YAML:
 

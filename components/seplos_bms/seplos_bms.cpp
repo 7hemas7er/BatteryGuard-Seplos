@@ -2,9 +2,10 @@
 // licensed under the Apache License, Version 2.0.
 //
 // Changes in this fork: adds decoding of the Seplos telesignalization frame
-// (CID2 0x44), which upstream does not request. The component now alternates
-// between the 0x42 telemetry command and the 0x44 alarm command, and exposes
-// the decoded warning / protection / system fault flags.
+// (CID2 0x44), which upstream does not request. The component alternates
+// between the 0x42 telemetry command and the 0x44 alarm command, recognises
+// each reply by its frame length, and exposes the decoded warning /
+// protection / system fault flags.
 //
 // See NOTICE and README.md for details.
 
@@ -22,17 +23,30 @@ void SeplosBms::on_seplos_modbus_data(const std::vector<uint8_t> &data) {
   this->reset_online_status_tracker_();
 
   // The response CID2 only carries a return code (0x00 = normal), not the
-  // original command, so route by the command we last requested.
-  if (this->last_requested_function_ == 0x44) {
+  // original command, so the reply has to be recognised by its shape.
+  //
+  // Do NOT route by the command we last sent: a late or lost reply leaves the
+  // bookkeeping pointing at the other command, and the frame is then handed to
+  // the wrong decoder. Decoding a telemetry frame as an alarm frame reads cell
+  // voltages and temperatures as alarm bitfields and publishes a burst of
+  // entirely fictional protections.
+  //
+  // The two frame types are unambiguous by length, for any supported cell
+  // count, so the size is what decides:
+  //
+  //   num_of_cells   telemetry_frame   alarm_frame
+  //   8              65                43-45
+  //   14             77                51
+  //   15             79                52-54
+  //   16             81                55
+  //
+  // Alarm frames are checked first: at 8 cells they can reach 45 bytes, which
+  // would also satisfy the telemetry lower bound of 44.
+  if (data.size() >= 9 && data.size() < 60 && data[8] >= 8 && data[8] <= 16) {
     this->on_telesignalization_data_(data);
     return;
   }
 
-  // num_of_cells   frame_size   data_len
-  // 8              65           118 (0x76)   guessed
-  // 14             77           142 (0x8E)
-  // 15             79           146 (0x92)
-  // 16             81           150 (0x96)
   if (data.size() >= 44 && data[8] >= 8 && data[8] <= 16) {
     this->on_telemetry_data_(data);
     return;
@@ -206,6 +220,10 @@ void SeplosBms::on_telesignalization_data_(const std::vector<uint8_t> &data) {
     return;
   }
   uint8_t temperature_sensors = data[offset];
+  if (temperature_sensors > 8) {
+    ESP_LOGW(TAG, "Unexpected temperature count in alarm frame: %d", temperature_sensors);
+    return;
+  }
   offset = offset + 1 + temperature_sensors;
   // current warning + total voltage warning + alarm-event count
   if (offset + 2 >= data.size()) {
@@ -214,11 +232,14 @@ void SeplosBms::on_telesignalization_data_(const std::vector<uint8_t> &data) {
   }
   uint8_t event_count = data[offset + 2];
   size_t ev = offset + 3;
-  if (ev + event_count > data.size()) {
-    ESP_LOGW(TAG, "Alarm-event region out of range (count=%u, available=%d)", event_count,
-             (int) (data.size() - ev));
-    event_count = (data.size() > ev) ? (uint8_t) (data.size() - ev) : 0;
+  // Events 1-6 plus the six state bytes plus events 7-8: 14 bytes have to be
+  // there. Refuse to decode a short frame rather than reading whatever follows.
+  if (ev + 14 > data.size()) {
+    ESP_LOGW(TAG, "Alarm-event region out of range (need %d bytes, have %d)", 14, (int) (data.size() - ev));
+    return;
   }
+  if (event_count > data.size() - ev)
+    event_count = (uint8_t) (data.size() - ev);
 
   // byte/bit -> meaning, from the official 16S_V20 protocol (Ext_Bit block).
   // prot=true marks a protection (BMS acted); prot=false marks a warning.
