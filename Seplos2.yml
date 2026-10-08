@@ -154,11 +154,11 @@ sensor:
     charging_power:
       name: "${name} charging power"
       unit_of_measurement: "W"
-      device_class: energy
+      device_class: power
       state_class: measurement
     discharging_power:
       name: "${name} discharging power"
-      device_class: energy
+      device_class: power
       unit_of_measurement: "W"
       state_class: measurement
     residual_capacity:
